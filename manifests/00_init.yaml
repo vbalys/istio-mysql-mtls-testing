@@ -1,0 +1,98 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: mysql-server
+  labels:
+    name: mysql-server
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: mysql-client
+  labels:
+    name: mysql-client
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-server
+  namespace: mysql-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-server
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      namespace: mysql-server
+      labels:
+        app: mysql-server
+      annotations:
+        sidecar.istio.io/logLevel: "debug"
+    spec:
+      containers:
+      - image: mysql:5.7.21
+        name: mysql-server
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: a
+        ports:
+        - containerPort: 3306
+          name: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-server
+  namespace: mysql-server
+spec:
+  ports:
+  - port: 3306
+    name: mysql
+    appProtocol: tcp
+  selector:
+    app: mysql-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-client
+  namespace: mysql-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-client
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      namespace: mysql-client
+      labels:
+        app: mysql-client
+    spec:
+      containers:
+      - image: mysql:5.7.21
+        name: mysql-client
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: namespace-metrics
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+    overrides:
+    - match:
+        metric: REQUEST_COUNT
+      tagOverrides:
+        destination_port:
+          value: "string(destination.port)"
+        request_host:
+          value: "request.host"
